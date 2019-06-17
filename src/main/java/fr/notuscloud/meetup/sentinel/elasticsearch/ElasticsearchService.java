@@ -47,18 +47,36 @@ public class ElasticsearchService {
 
     public Long countVaultDecryptRequests(){
 
-        // Instanciate a CountRequest object
-        CountRequest countRequest = new CountRequest().indices("vault");
+        // Instanciate a SearchRequest
+        SearchRequest searchRequest = new SearchRequest().indices("filebeat-*");
         // Is used to configure the search
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+
+        // Working with time
+        SimpleDateFormat format = new SimpleDateFormat(dateFormatPattern, Locale.FRENCH);
+        format.setTimeZone(TimeZone.getTimeZone("GMT"));
 
         searchSourceBuilder.query(QueryBuilders.boolQuery()
                 .must(QueryBuilders.matchQuery("audit.request.path", "transit/decrypt/gatekeeper"))
                 .must(QueryBuilders.matchQuery("audit.type", "request"))
-                .filter(QueryBuilders.rangeQuery("@timestamp").from("now-"+HOURS+"h"))
+                .filter(QueryBuilders.rangeQuery("@timestamp")
+                        .from("now-"+HOURS+"h")
+                        .timeZone("GMT")
+                )
         );
 
-        return countDocuments(countRequest, searchSourceBuilder);
+        Long count = null;
+        try {
+            searchRequest.source(searchSourceBuilder);
+            SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+            count = response.getHits().getTotalHits().value;
+        }catch(ElasticsearchException e) {
+            LOG.error(e.getDetailedMessage());
+        } catch (IOException ex){
+            LOG.error(ex.getLocalizedMessage());
+        }
+
+        return count;
     }
 
     public Long countGatekeeperDecryptRequests(){
@@ -68,9 +86,16 @@ public class ElasticsearchService {
 
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
 
+        // Working with time
+        SimpleDateFormat format = new SimpleDateFormat(dateFormatPattern, Locale.FRENCH);
+        format.setTimeZone(TimeZone.getTimeZone("GMT"));
+
         searchSourceBuilder.query(QueryBuilders.boolQuery()
                 .must(QueryBuilders.matchAllQuery())
-                .filter(QueryBuilders.rangeQuery("timestamp").from("now-"+HOURS+"h"))
+                .filter(QueryBuilders.rangeQuery("timestamp")
+                        .from(format.format(LocalDateTime.now().minusHours(HOURS).toDate()))
+                        .to(format.format(LocalDateTime.now().toDate()))
+                )
         );
         return countDocuments(countRequest, searchSourceBuilder);
 
@@ -84,6 +109,7 @@ public class ElasticsearchService {
         try {
             CountResponse count = restHighLevelClient.count(request, RequestOptions.DEFAULT);
             result = count.getCount();
+
         }catch(ElasticsearchException e) {
             LOG.error(e.getDetailedMessage());
         } catch (IOException ex){
