@@ -24,6 +24,12 @@
   </scm>
 
 	<dependencies>
+		<!--Slack-->
+		<dependency>
+			<groupId>com.github.seratch</groupId>
+			<artifactId>jslack-api-client</artifactId>
+			<version>1.7.1</version>
+		</dependency>
 		<!--Elasticsearch-->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

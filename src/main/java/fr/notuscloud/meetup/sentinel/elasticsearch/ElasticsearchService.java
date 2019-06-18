@@ -16,12 +16,18 @@ import org.joda.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+// jSlack
+import com.github.seratch.jslack.*;
+import com.github.seratch.jslack.api.webhook.*;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ElasticsearchService {
@@ -29,18 +35,19 @@ public class ElasticsearchService {
     // Number of hours from now(), used to calculate the time range for ES queries
     @Value("${sentinel.period}")
     private Integer HOURS;
+    @Value("${slack.webhook.url}")
+    private String webhookUrl;
 
     // Statics
     // Not used anymore
     private final String dateFormatPattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
-    // High Rest Client singleton
-    private RestHighLevelClient restHighLevelClient;
-
     // Logger
     private static final Logger LOG = LoggerFactory.getLogger(ElasticsearchConfiguration.class);
 
-    // Constructor
+    // Singletons
+    private RestHighLevelClient restHighLevelClient;
+
     public ElasticsearchService(RestHighLevelClient restHighLevelClient) {
         this.restHighLevelClient = restHighLevelClient;
     }
@@ -116,6 +123,37 @@ public class ElasticsearchService {
             LOG.error(ex.getLocalizedMessage());
         }
         return result;
+
+    }
+
+    // Cronjob scheduled check
+    @Scheduled(fixedRate = 30000)
+    public void checkCounts(){
+
+        Long countGatekeeper = countGatekeeperDecryptRequests();
+        Long countVault      = countVaultDecryptRequests();
+
+        LOG.info("DEBUG: Checking document count, vault:" + countVault + ", gatekeeper:" + countGatekeeper);
+        Integer test = Long.compare(countGatekeeper, countVault);
+        if ( test != 0 ){
+
+            Payload payload = Payload.builder()
+                    .iconEmoji(":gandalf:")
+                    .username("Sentinel")
+                    .text("*ALERT!* Found difference in the number of documents!!!\nGatekeeper: "
+                            + countGatekeeper
+                            +"\nVault: "
+                            + countVault)
+                    .build();
+
+            Slack slack = Slack.getInstance();
+            try{
+                WebhookResponse  response = slack.send(webhookUrl, payload);
+                LOG.info("SLACK: Alert sending status is ->" +response.getMessage());
+            }catch (IOException e){
+                LOG.debug(e.toString());
+            }
+        }
 
     }
 
