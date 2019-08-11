@@ -12,12 +12,16 @@ public class ElasticsearchConfiguration {
 
     @Value("${elasticsearch.cluster.nodes}")
     private String elasticsearchHost;
+    @Value("${elasticsearch.cluster.port}")
+    private Integer elasticsearchPort;
+    @Value("${elasticsearch.cluster.scheme}")
+    private String elasticsearchScheme;
 
     @Bean(destroyMethod = "close")
     public RestHighLevelClient client() {
 
         RestHighLevelClient client = new RestHighLevelClient(
-                RestClient.builder(new HttpHost(elasticsearchHost, 443, "https")));
+                RestClient.builder(new HttpHost(elasticsearchHost, elasticsearchPort, elasticsearchScheme)));
 
         return client;
 
